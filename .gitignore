@@ -1,0 +1,6 @@
+*.env
+*.netrc
+ws-remote.conf
+__pycache__/
+*.pyc
+.venv/

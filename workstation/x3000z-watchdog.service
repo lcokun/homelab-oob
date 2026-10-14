@@ -1,0 +1,13 @@
+[Unit]
+Description=Reboot the X3000Z AP when its backhaul to the ZTE drops
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+ExecStart=/usr/bin/python3 /usr/local/bin/x3000z-watchdog
+EnvironmentFile=/etc/x3000z-watchdog.env
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
