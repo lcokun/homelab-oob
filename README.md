@@ -69,6 +69,9 @@ The BMC account the Yún uses has Operator privilege only: it can switch power b
 
 ## Security notes
 
-- Credentials live in root-only files on each device (`/etc/x3000z-watchdog.env`, `/etc/bmc.netrc`) and never appear on a command line.
-- The Yún's factory open Wi-Fi AP, web panel, web terminal, AllJoyn and avahi are all disabled. Only SSH is listening.
+- Credentials live in root-only files on each device (`/etc/x3000z-watchdog.env`, `/etc/bmc.netrc`) and never appear on a command line. The router password reaches `openssl` through stdin.
+- The BMC's certificate is self-signed, so curl runs with `-k` plus `--pinnedpubkey`. The pin lives in `/etc/ws-remote.conf` as `BMC_PUBKEY_PIN`, and a BMC presenting any other key is refused (curl exit 90). Get the value with `openssl s_client -connect <bmc>:443 </dev/null | openssl x509 -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | base64`, ideally from two machines, and check they agree.
+- The AP's own login is weak by design. Its web UI fetches the AES key and sends the encrypted password over plain HTTP, so anyone who can sniff the LAN can recover the password. Give the AP a password you use nowhere else.
+- On the Yún, the factory open Wi-Fi AP, web panel, web terminal, AllJoyn, avahi and dnsmasq are all disabled. SSH is key-only, and it's the only port listening.
+- IPMI over LAN is off on the BMC (`ipmitool lan set 1 access off`, run in-band from the workstation). IPMI 2.0 hands a crackable password hash to anyone who asks, and nothing here needs it. Redfish and the web UI are unaffected. I checked with an unauthenticated "Get Channel Authentication Capabilities" probe: it gets an answer with access on and silence with it off.
 - Anyone who learns the ntfy topic names can switch the workstation on or off. That's the accepted trade-off for having no inbound ports. The topic names are not in this repo.

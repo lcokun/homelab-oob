@@ -46,7 +46,7 @@ def read_config():
             if "=" in line:
                 key, value = line.strip().split("=", 1)
                 config[key] = value
-    return config["CMD_TOPIC"], config["REPLY_TOPIC"]
+    return config
 
 
 def curl(args, data=None):
@@ -58,25 +58,31 @@ def curl(args, data=None):
     return out
 
 
-def bmc_power_state():
-    reply = json.loads(curl(["-k", "--netrc-file", BMC_NETRC, BMC_SYSTEM_URL]))
+def bmc_auth(pubkey_pin):
+    # The BMC's certificate is self-signed for "ami.com", so normal verification
+    # can't work; -k skips it and the pinned public key takes its place.
+    return ["-k", "--pinnedpubkey", "sha256//" + pubkey_pin, "--netrc-file", BMC_NETRC]
+
+
+def bmc_power_state(pubkey_pin):
+    reply = json.loads(curl(bmc_auth(pubkey_pin) + [BMC_SYSTEM_URL]))
     return reply.get("PowerState", "unknown")
 
 
-def bmc_reset(reset_type):
+def bmc_reset(reset_type, pubkey_pin):
     body = json.dumps({"ResetType": reset_type})
-    return curl(["-k", "--netrc-file", BMC_NETRC, "-H", "Content-Type: application/json",
-                 "-o", "/dev/null", "-w", "%{http_code}", "--data-binary", "@-",
-                 BMC_SYSTEM_URL + "/Actions/ComputerSystem.Reset"], body)
+    return curl(bmc_auth(pubkey_pin) + ["-H", "Content-Type: application/json",
+                "-o", "/dev/null", "-w", "%{http_code}", "--data-binary", "@-",
+                BMC_SYSTEM_URL + "/Actions/ComputerSystem.Reset"], body)
 
 
-def run_command(command):
+def run_command(command, pubkey_pin):
     if command == "status":
-        return "workstation is %s" % bmc_power_state()
+        return "workstation is %s" % bmc_power_state(pubkey_pin)
     reset_type = RESET_TYPES.get(command)
     if reset_type is None:
         return "unknown command %r (use: status, on, off, forceoff)" % command
-    code = bmc_reset(reset_type)
+    code = bmc_reset(reset_type, pubkey_pin)
     if code not in BMC_OK_CODES:
         return "%s failed: BMC returned HTTP %s" % (command, code)
     return "%s sent (%s)" % (command, reset_type)
@@ -92,7 +98,7 @@ def reply(topic, text):
     curl(["-o", "/dev/null", "--data-binary", "@-", "%s/%s" % (NTFY_URL, topic)], text)
 
 
-def serve(cmd_topic, reply_topic):
+def serve(cmd_topic, reply_topic, pubkey_pin):
     since = FIRST_POLL_LOOKBACK
     seen_ids = set()
     log("polling ntfy every %ds" % POLL_INTERVAL_S)
@@ -105,7 +111,7 @@ def serve(cmd_topic, reply_topic):
                 seen_ids.add(message["id"])
                 command = message.get("message", "").strip().lower()
                 log("command %r" % command)
-                answer = run_command(command)
+                answer = run_command(command, pubkey_pin)
                 log(answer)
                 reply(reply_topic, answer)
         except (CurlError, ValueError, KeyError) as error:
@@ -114,11 +120,12 @@ def serve(cmd_topic, reply_topic):
 
 
 def main():
-    cmd_topic, reply_topic = read_config()
+    config = read_config()
+    pubkey_pin = config["BMC_PUBKEY_PIN"]
     if len(sys.argv) > 1:
-        print(run_command(sys.argv[1]))
+        print(run_command(sys.argv[1], pubkey_pin))
         return 0
-    serve(cmd_topic, reply_topic)
+    serve(config["CMD_TOPIC"], config["REPLY_TOPIC"], pubkey_pin)
     return 0
 
 

@@ -1,3 +1,4 @@
 CMD_TOPIC=ws-<random, e.g. python -c "import secrets; print(secrets.token_urlsafe(24))">
 REPLY_TOPIC=ws-<another random value>
+BMC_PUBKEY_PIN=<base64 sha256 of the BMC public key, see README>   # Yun copy only
 WS_TAILSCALE_HOST=<workstation tailscale ip>   # laptop copy only
