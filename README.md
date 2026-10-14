@@ -72,7 +72,3 @@ The BMC account the Yún uses has Operator privilege only: it can switch power b
 - Credentials live in root-only files on each device (`/etc/x3000z-watchdog.env`, `/etc/bmc.netrc`) and never appear on a command line.
 - The Yún's factory open Wi-Fi AP, web panel, web terminal, AllJoyn and avahi are all disabled. Only SSH is listening.
 - Anyone who learns the ntfy topic names can switch the workstation on or off. That's the accepted trade-off for having no inbound ports. The topic names are not in this repo.
-
-The IP addresses in the code are the ones on my home network. Change them to match yours.
-
-Built with [Claude Code](https://claude.com/claude-code) as a pair programmer.
