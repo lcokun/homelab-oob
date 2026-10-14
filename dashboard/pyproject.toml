@@ -1,0 +1,20 @@
+[project]
+name = "homelab-dashboard"
+version = "0.1.0"
+description = "Terminal dashboard for the homelab: workstation, BMC sensors, router watchdog and Yún, read from ntfy status snapshots"
+requires-python = ">=3.12"
+dependencies = [
+    "textual>=8.2.8",
+]
+
+[project.scripts]
+homelab = "homelab_dashboard.app:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]

@@ -26,9 +26,11 @@ flowchart LR
 | Path | What it is |
 |---|---|
 | `yun/x3000z-watchdog.py` | Router watchdog, Python 2.7 (all the Yún has). Started by `yun/init.d/x3000z-watchdog`. |
-| `yun/ws-remote.py` | Polls ntfy for `status`/`on`/`off`/`forceoff`, calls the BMC's Redfish API, replies on a second topic. Started by `yun/init.d/ws-remote`. |
+| `yun/ws-remote.py` | Polls ntfy for `status`/`on`/`off`/`forceoff`/`report`, calls the BMC's Redfish API, replies on a second topic, and publishes a status snapshot to a third. Started by `yun/init.d/ws-remote`. |
 | `laptop/ws.fish` | The client: `ws on` sends the command, waits for the reply, then waits until the workstation answers over Tailscale. |
-| `workstation/` | The original Python 3 watchdog plus its systemd unit. Still runs as a second watchdog whenever the workstation is on. |
+| `workstation/x3000z-watchdog.*` | The original Python 3 watchdog plus its systemd unit. Still runs as a second watchdog whenever the workstation is on. |
+| `workstation/ws-status-push.*` | Publishes the workstation's own snapshot (GPU, disk, services, desktop session) at boot and every 30 minutes. |
+| `dashboard/` | `homelab`, a Textual TUI on the laptop that shows the latest snapshots. |
 | `config/*.example` | Placeholder config. The real files are root-only and not in this repo. |
 
 ## How it works
@@ -53,6 +55,14 @@ The Yún's OpenSSL (1.0.1, from 2014) can't talk to the BMC at all, because the 
 
 The BMC account the Yún uses has Operator privilege only: it can switch power but can't change users or BMC settings. The BMC's power-restore policy is `previous`, so after a blackout the workstation comes back in whatever state it was in.
 
+### Dashboard
+
+`homelab` shows what would otherwise take a handful of commands: the workstation's power state and whether its OS answers over Tailscale, its GPU, disk and services, the BMC's temperature and fan sensors, the router watchdog's recent log, and the Yún's own health.
+
+Nothing at home serves it. The Yún and the workstation each publish a JSON snapshot to a private ntfy topic every 30 minutes, and the dashboard reads the newest one per device from ntfy's cache, so it opens on the last known state straight away. Pressing `r` sends `report` to the Yún, which publishes a fresh snapshot within one poll cycle (about 30 seconds). When the workstation is off, its last snapshot stays on screen, dimmed and marked as history.
+
+The interval comes from ntfy.sh's free limits: 250 messages a day per IP, and the Yún and workstation share one. Two devices every 30 minutes is about 100 a day. Each snapshot has to fit in one 4,096-byte message, so the Yún sends only the BMC sensors that have a reading (about 900 bytes) instead of the raw 7 to 10 KB Redfish documents.
+
 ## Things that went wrong
 
 - The drops were probably caused by DFS. The ISP router's 5 GHz channel was on Auto, which can land on DFS channels that must move off when radar is detected. The mesh backhaul didn't always follow. If that's right, pinning the channel to a non-DFS one fixes it, and the watchdog covers anything else.
@@ -65,7 +75,9 @@ The BMC account the Yún uses has Operator privilege only: it can switch power b
 
 - Watchdog: on both the workstation and the Yún, `--test` logs in and `--reboot-now` really rebooted the AP (in the workstation run, the wired links dropped four seconds after the call). The Yún copy autostarts after a reboot, and a cron job restarts it if it dies. The automatic path (five failed pings, then reboot) hasn't caught a real backhaul drop yet.
 - Remote power: full cycle `ws status` → `systemctl poweroff` → `ws status` (Off) → `ws on` → workstation boots, auto-logs in, and Sunshine is running in that session.
+- Dashboard: run headless against the live topics, both devices' snapshots render, and `r` brought a fresh Yún snapshot in 29 seconds.
 - `tests/`: `uv run --no-project --with pytest --with pycryptodome pytest -q tests`
+- `dashboard/tests/`: `cd dashboard && uv run pytest -q`
 
 ## Security notes
 
@@ -74,4 +86,4 @@ The BMC account the Yún uses has Operator privilege only: it can switch power b
 - The AP's own login is weak by design. Its web UI fetches the AES key and sends the encrypted password over plain HTTP, so anyone who can sniff the LAN can recover the password. Give the AP a password you use nowhere else.
 - On the Yún, the factory open Wi-Fi AP, web panel, web terminal, AllJoyn, avahi and dnsmasq are all disabled. SSH is key-only, and it's the only port listening.
 - IPMI over LAN is off on the BMC (`ipmitool lan set 1 access off`, run in-band from the workstation). IPMI 2.0 hands a crackable password hash to anyone who asks, and nothing here needs it. Redfish and the web UI are unaffected. I checked with an unauthenticated "Get Channel Authentication Capabilities" probe: it gets an answer with access on and silence with it off.
-- Anyone who learns the ntfy topic names can switch the workstation on or off. That's the accepted trade-off for having no inbound ports. The topic names are not in this repo.
+- Anyone who learns the ntfy topic names can switch the workstation on or off, or read its status snapshots. That's the accepted trade-off for having no inbound ports. The three topic names are not in this repo.
