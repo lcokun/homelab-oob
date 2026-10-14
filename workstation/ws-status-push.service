@@ -1,0 +1,11 @@
+[Unit]
+Description=Publish workstation status to the homelab dashboard
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=adminmel
+# systemctl --user (for Sunshine's state) needs the user's runtime dir; linger keeps it present.
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+ExecStart=/usr/bin/python3 /usr/local/bin/ws-status-push

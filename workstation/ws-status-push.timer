@@ -1,0 +1,9 @@
+[Unit]
+Description=Publish workstation status at boot and every 30 minutes
+
+[Timer]
+OnBootSec=2min
+OnCalendar=*:00/30
+
+[Install]
+WantedBy=timers.target
