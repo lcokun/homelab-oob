@@ -1,6 +1,7 @@
 #!/bin/sh /etc/rc.common
 # Reboot the X3000Z when its backhaul to the ZTE drops. Cron re-runs `start`
-# every 10 min, which is a no-op while the watchdog is alive.
+# every 10 min, which is a no-op while the watchdog is alive. The script writes
+# its own pidfile and exits on SIGTERM, so `stop` and the respawn both key off it.
 
 START=99
 STOP=10
@@ -13,10 +14,9 @@ start() {
 	set -a
 	. "$ENV_FILE"
 	set +a
-	start-stop-daemon -S -q -b -m -p "$PIDFILE" -x /usr/bin/python -- "$SCRIPT"
+	start-stop-daemon -S -q -b -p "$PIDFILE" -x /usr/bin/python -- "$SCRIPT"
 }
 
 stop() {
 	start-stop-daemon -K -q -p "$PIDFILE"
-	rm -f "$PIDFILE"
 }
