@@ -28,7 +28,6 @@ flowchart LR
 | `yun/x3000z-watchdog.py` | Router watchdog, Python 2.7 (all the Yún has). Started by `yun/init.d/x3000z-watchdog`. |
 | `yun/ws-remote.py` | Polls ntfy for `status`/`on`/`off`/`forceoff`/`report`, calls the BMC's Redfish API, replies on a second topic, and publishes a status snapshot to a third. Started by `yun/init.d/ws-remote`. |
 | `laptop/ws.fish` | The client: `ws on` sends the command, waits for the reply, then waits until the workstation answers over Tailscale. |
-| `workstation/x3000z-watchdog.*` | The original Python 3 watchdog plus its systemd unit. Still runs as a second watchdog whenever the workstation is on. |
 | `workstation/ws-status-push.*` | Publishes the workstation's own snapshot (GPU, disk, services, desktop session) at boot and every 30 minutes. |
 | `dashboard/` | `homelab`, a Textual TUI on the laptop that shows the latest snapshots. |
 | `config/*.example` | Placeholder config. The real files are root-only and not in this repo. |
@@ -73,7 +72,7 @@ The interval comes from ntfy.sh's free limits: 250 messages a day per IP, and th
 
 ## Verified
 
-- Watchdog: on both the workstation and the Yún, `--test` logs in and `--reboot-now` really rebooted the AP (in the workstation run, the wired links dropped four seconds after the call). The Yún copy autostarts after a reboot, and a cron job restarts it if it dies. The automatic path (five failed pings, then reboot) hasn't caught a real backhaul drop yet.
+- Watchdog: `--test` logs in and `--reboot-now` really rebooted the AP, both on the Yún and on an earlier Python 3 copy that ran on the workstation (retired in October 2026; the wired links dropped four seconds after the call). The Yún copy autostarts after a reboot, and a cron job restarts it if it dies. The automatic path (five failed pings, then reboot) hasn't caught a real backhaul drop yet.
 - Remote power: full cycle `ws status` → `systemctl poweroff` → `ws status` (Off) → `ws on` → workstation boots, auto-logs in, and Sunshine is running in that session.
 - Dashboard: run headless against the live topics, both devices' snapshots render, and `r` brought a fresh Yún snapshot in 29 seconds.
 - `tests/`: `uv run --no-project --with pytest --with pycryptodome pytest -q tests`
