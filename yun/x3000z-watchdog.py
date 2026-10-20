@@ -4,7 +4,7 @@
 Python 2.7 port for the Arduino Yun (Linino / OpenWrt 12.09, no python3).
 The Yun is wired straight into the X3000Z. While the backhaul is up it also
 sends a heartbeat to healthchecks.io (which alerts when the room goes quiet),
-logs the backhaul RSSI, and alerts when anything other than a mesh agent joins
+logs ping loss/RTT and the backhaul RSSI, and alerts when anything other than a mesh agent joins
 the ZTE's backhaul network.
 
 Usage:
@@ -18,6 +18,7 @@ import collections
 import httplib
 import json
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -36,6 +37,7 @@ TOPOLOGY_EVERY_CHECKS = 10
 HTTP_TIMEOUT_S = 10
 LOG_PATH = "/mnt/sda1/x3000z-watchdog.log"  # SD card, survives reboots unlike logread
 RSSI_LOG_PATH = "/mnt/sda1/backhaul-rssi.csv"
+LINK_LOG_PATH = "/mnt/sda1/backhaul.csv"  # epoch,loss_pct,avg_ms per check
 PID_PATH = "/var/run/x3000z-watchdog.pid"
 NETWORK_ERRORS = (IOError, httplib.HTTPException)  # URLError and socket.timeout are IOErrors
 # The Yun's own OpenSSL is too old for healthchecks.io and ntfy.sh, so HTTPS goes through the static curl.
@@ -48,8 +50,14 @@ UNMEASURED_RSSI = "0"  # what the X3000Z reports until link metrics come in afte
 # The first easymesh_topology after a quiet spell often lists only the X3000Z itself;
 # the full table (with the ZTE and its backhaul stations) is there ~20 s later.
 TOPOLOGY_SETTLE_S = 20
+# busybox ping summary: "3 packets transmitted, 3 packets received, 0% packet loss"
+# and "round-trip min/avg/max = 1.960/2.663/4.011 ms" (absent when nothing came back)
+LOSS_PATTERN = re.compile(r"(\d+)% packet loss")
+AVG_RTT_PATTERN = re.compile(r"min/avg/max = [\d.]+/([\d.]+)/")
+TOTAL_LOSS = 100
 
 Config = collections.namedtuple("Config", "username password heartbeat_url alert_topic")
+PingResult = collections.namedtuple("PingResult", "loss_pct avg_ms")  # avg_ms is "" with no reply
 
 
 class RouterError(Exception):
@@ -71,10 +79,22 @@ def log(message):
         subprocess.call(["logger", "-t", "x3000z-watchdog", "cannot write %s: %s" % (LOG_PATH, error)])
 
 
-def gateway_reachable():
-    with open(os.devnull, "w") as devnull:
-        ping = ["ping", "-c", "3", "-W", "2", "-q", GATEWAY_IP]
-        return subprocess.call(ping, stdout=devnull, stderr=devnull) == 0
+def parse_ping(output):
+    loss = LOSS_PATTERN.search(output)
+    avg_rtt = AVG_RTT_PATTERN.search(output)
+    # no summary at all (e.g. "Network is unreachable") counts as total loss
+    return PingResult(int(loss.group(1)) if loss else TOTAL_LOSS, avg_rtt.group(1) if avg_rtt else "")
+
+
+def ping_gateway():
+    ping = subprocess.Popen(["ping", "-c", "3", "-W", "2", "-q", GATEWAY_IP],
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    return parse_ping(ping.communicate()[0])
+
+
+def record_link(result):
+    with open(LINK_LOG_PATH, "a") as link_log:
+        link_log.write("%d,%d,%s\n" % (time.time(), result.loss_pct, result.avg_ms))
 
 
 def curl(args, data=None):
@@ -270,7 +290,12 @@ def watch(config):
         log("HC_PING_URL or ALERT_TOPIC not set: heartbeat and alerts are partly off")
     while True:
         checks += 1
-        if gateway_reachable():
+        result = ping_gateway()
+        try:
+            record_link(result)
+        except IOError as error:
+            log("cannot write %s: %s" % (LINK_LOG_PATH, error))
+        if result.loss_pct < TOTAL_LOSS:
             if down_since is not None:
                 minutes = (time.time() - down_since) / 60
                 log("gateway back after %.1f min" % minutes)
