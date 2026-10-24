@@ -18,8 +18,8 @@ import time
 CURL = ["/mnt/sda1/bin/curl", "-s", "-m", "20", "--cacert", "/mnt/sda1/bin/cacert.pem"]
 CONFIG_PATH = "/etc/ws-remote.conf"
 BMC_NETRC = "/etc/bmc.netrc"
-BMC_SYSTEM_URL = "https://192.168.0.33/redfish/v1/Systems/Self"
-BMC_THERMAL_URL = "https://192.168.0.33/redfish/v1/Chassis/Self/Thermal"
+BMC_SYSTEM_URL = "https://192.168.69.33/redfish/v1/Systems/Self"
+BMC_THERMAL_URL = "https://192.168.69.33/redfish/v1/Chassis/Self/Thermal"
 BMC_OK_CODES = ("200", "202", "204")
 RESET_TYPES = {"on": "On", "off": "GracefulShutdown", "forceoff": "ForceOff"}
 NTFY_URL = "https://ntfy.sh"
