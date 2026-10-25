@@ -20,7 +20,6 @@ SENSOR_LABELS = {
 HIDDEN_SENSORS = {"FSC_INDEX"}
 TEMP_WARN_C = {"TEMP_CPU": 85, "TEMP_M.2": 70}
 DEFAULT_TEMP_WARN_C = 75
-UNIT_LABELS = {"x3000z-watchdog": "watchdog"}
 EVENT_STYLES = (
     ("reboot failed", "bold red"),
     ("recovery failed", "bold red"),
@@ -84,7 +83,7 @@ def units_text(units: dict[str, str]) -> Text:
     text = Text()
     for unit, state in units.items():
         text.append("● ", style="green" if state == "active" else "red")
-        text.append(f"{UNIT_LABELS.get(unit, unit)}  ")
+        text.append(f"{unit}  ")
     return text
 
 

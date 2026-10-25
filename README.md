@@ -25,7 +25,7 @@ flowchart LR
 
 | Path | What it is |
 |---|---|
-| `yun/x3000z-watchdog.py` | Uplink watchdog, Python 2.7 (all the Yún has). Started by `yun/init.d/x3000z-watchdog`. The name is left over from the previous access point. |
+| `yun/room-watchdog.py` | Uplink watchdog, Python 2.7 (all the Yún has). Started by `yun/init.d/room-watchdog`. |
 | `yun/ws-remote.py` | Polls ntfy for `status`/`on`/`off`/`forceoff`/`report`, calls the BMC's Redfish API, replies on a second topic, and publishes a status snapshot to a third. Started by `yun/init.d/ws-remote`. |
 | `laptop/ws.fish` | The client: `ws on` sends the command, waits for the reply, then waits until the workstation answers over Tailscale. |
 | `workstation/ws-status-push.*` | Publishes the workstation's own snapshot (GPU, disk, services, desktop session) at boot and every 30 minutes. |
@@ -101,7 +101,7 @@ The interval comes from ntfy.sh's free limits: 250 messages a day per IP, and th
 
 ## Security notes
 
-- Credentials live in root-only files on each device (`/etc/x3000z-watchdog.env`, `/etc/bmc.netrc`) and never appear on a command line.
+- Credentials live in root-only files on each device (`/etc/room-watchdog.env`, `/etc/bmc.netrc`) and never appear on a command line.
 - The BMC's certificate is self-signed, so curl runs with `-k` plus `--pinnedpubkey`. The pin lives in `/etc/ws-remote.conf` as `BMC_PUBKEY_PIN`, and a BMC presenting any other key is refused (curl exit 90). Get the value with `openssl s_client -connect <bmc>:443 </dev/null | openssl x509 -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | base64`, ideally from two machines, and check they agree.
 - The router login goes over plain HTTP on the room LAN. The `yun` account's password is random and used nowhere else, and its ACL limits it to reading the uplink, restarting Wi-Fi and rebooting. Only a hash is stored on the router.
 - On the Yún, the factory open Wi-Fi AP, web panel, web terminal, AllJoyn, avahi and dnsmasq are all disabled. SSH is key-only, and it's the only port listening.

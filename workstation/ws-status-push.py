@@ -14,7 +14,7 @@ from pathlib import Path
 CONFIG_PATH = Path("/etc/ws-status.conf")
 NTFY_URL = "https://ntfy.sh"
 HTTP_TIMEOUT_S = 15
-SYSTEM_UNITS = ("x3000z-watchdog", "tailscaled", "docker")
+SYSTEM_UNITS = ("tailscaled", "docker")
 USER_UNITS = {"sunshine": "app-dev.lizardbyte.app.Sunshine.service"}
 GPU_FIELDS = ("util_pct", "temp_c", "mem_used_mib", "mem_total_mib", "power_w")
 GPU_QUERY = "utilization.gpu,temperature.gpu,memory.used,memory.total,power.draw"

@@ -6,9 +6,9 @@
 START=99
 STOP=10
 
-PIDFILE=/var/run/x3000z-watchdog.pid
-SCRIPT=/root/x3000z-watchdog.py
-ENV_FILE=/etc/x3000z-watchdog.env
+PIDFILE=/var/run/room-watchdog.pid
+SCRIPT=/root/room-watchdog.py
+ENV_FILE=/etc/room-watchdog.env
 
 start() {
 	set -a

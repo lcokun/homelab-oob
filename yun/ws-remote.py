@@ -28,8 +28,8 @@ POLL_INTERVAL_S = 30
 FIRST_POLL_LOOKBACK = "%ds" % (POLL_INTERVAL_S + 15)
 STATUS_INTERVAL_S = 30 * 60  # ntfy.sh allows 250 messages/day per IP, shared with the workstation
 LOG_PATH = "/mnt/sda1/ws-remote.log"
-WATCHDOG_LOG_PATH = "/mnt/sda1/x3000z-watchdog.log"
-WATCHDOG_SCRIPT = "x3000z-watchdog.py"
+WATCHDOG_LOG_PATH = "/mnt/sda1/room-watchdog.log"
+WATCHDOG_SCRIPT = "room-watchdog.py"
 RECENT_EVENTS = 8
 
 

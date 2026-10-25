@@ -11,14 +11,11 @@ While the link is up it also sends a heartbeat to
 healthchecks.io (which alerts when the room goes quiet) and logs ping loss/RTT
 and the uplink signal.
 
-The file keeps the name of the room's previous router (a D-Link X3000Z) because
-the init script, ws-remote and the dashboard all refer to it.
-
 Usage:
-  x3000z-watchdog.py                 watch loop (started by /etc/init.d/x3000z-watchdog)
-  x3000z-watchdog.py --test          log in and read the uplink, no changes
-  x3000z-watchdog.py --restart-wifi  restart the router's uplink radio now
-  x3000z-watchdog.py --reboot-now    reboot the router now
+  room-watchdog.py                 watch loop (started by /etc/init.d/room-watchdog)
+  room-watchdog.py --test          log in and read the uplink, no changes
+  room-watchdog.py --restart-wifi  restart the router's uplink radio now
+  room-watchdog.py --reboot-now    reboot the router now
 """
 import collections
 import httplib
@@ -46,10 +43,10 @@ RECOVERY_COOLDOWN_S = 10 * 60  # a router reboot takes ~3.5 min to bring the upl
 HEARTBEAT_EVERY_CHECKS = 5
 UPLINK_EVERY_CHECKS = 10
 HTTP_TIMEOUT_S = 10
-LOG_PATH = "/mnt/sda1/x3000z-watchdog.log"  # SD card, survives reboots unlike logread
+LOG_PATH = "/mnt/sda1/room-watchdog.log"  # SD card, survives reboots unlike logread
 SIGNAL_LOG_PATH = "/mnt/sda1/uplink-signal.csv"  # epoch,signal_dbm (backhaul-rssi.csv is the X3000Z era)
 LINK_LOG_PATH = "/mnt/sda1/backhaul.csv"  # epoch,loss_pct,avg_ms per check
-PID_PATH = "/var/run/x3000z-watchdog.pid"
+PID_PATH = "/var/run/room-watchdog.pid"
 ROUTE_TABLE_PATH = "/proc/net/route"
 DEFAULT_DESTINATION = "00000000"  # 0.0.0.0 in /proc/net/route's hex notation
 YUN_WAN_INTERFACE = "wan"
@@ -79,12 +76,12 @@ class CurlError(Exception):
 def log(message):
     line = "%s %s" % (time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()), message)
     print(line)
-    subprocess.call(["logger", "-t", "x3000z-watchdog", message])
+    subprocess.call(["logger", "-t", "room-watchdog", message])
     try:
         with open(LOG_PATH, "a") as log_file:
             log_file.write(line + "\n")
     except IOError as error:
-        subprocess.call(["logger", "-t", "x3000z-watchdog", "cannot write %s: %s" % (LOG_PATH, error)])
+        subprocess.call(["logger", "-t", "room-watchdog", "cannot write %s: %s" % (LOG_PATH, error)])
 
 
 def parse_ping(output):
@@ -313,7 +310,7 @@ def stop_on_sigterm(signum, frame):
 
 def run_watch(config):
     # The process may inherit an ignored SIGTERM from whoever started it; this makes
-    # `/etc/init.d/x3000z-watchdog stop` work regardless.
+    # `/etc/init.d/room-watchdog stop` work regardless.
     signal.signal(signal.SIGTERM, stop_on_sigterm)
     with open(PID_PATH, "w") as pid_file:
         pid_file.write("%d\n" % os.getpid())
