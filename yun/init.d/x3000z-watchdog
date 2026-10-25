@@ -1,5 +1,5 @@
 #!/bin/sh /etc/rc.common
-# Reboot the X3000Z when its backhaul to the ZTE drops. Cron re-runs `start`
+# Restart or reboot the room router when its uplink to the ZTE drops. Cron re-runs `start`
 # every 10 min, which is a no-op while the watchdog is alive. The script writes
 # its own pidfile and exits on SIGTERM, so `stop` and the respawn both key off it.
 

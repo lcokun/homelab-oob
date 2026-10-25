@@ -23,14 +23,19 @@ DEFAULT_TEMP_WARN_C = 75
 UNIT_LABELS = {"x3000z-watchdog": "watchdog"}
 EVENT_STYLES = (
     ("reboot failed", "bold red"),
+    ("recovery failed", "bold red"),
     ("unreachable", "red"),
     ("rebooting", "yellow"),
+    ("restarting", "yellow"),
+    ("Wi-Fi restart sent", "yellow"),
     ("reboot sent", "yellow"),
     ("reboot accepted", "yellow"),
     ("back after", "green"),
 )
 DROP_MARKER = "unreachable"
-REBOOT_MARKERS = ("rebooting X3000Z", "reboot sent", "reboot accepted")
+# "rebooting X3000Z" matches log lines from before the AX3000T replaced it
+RECOVERY_MARKERS = ("rebooting X3000Z", "rebooting the router", "restarting the router's Wi-Fi",
+                    "reboot sent", "reboot accepted", "Wi-Fi restart sent")
 
 
 def local_time(moment: datetime) -> str:
@@ -148,7 +153,7 @@ def network_panel(yun: YunSnapshot | None) -> RenderableType:
         return Text("no Yún snapshot yet", style="dim")
     summary = key_value_table([
         ("Last drop", Text(last_event_matching(yun.events, (DROP_MARKER,)))),
-        ("Last reboot", Text(last_event_matching(yun.events, REBOOT_MARKERS))),
+        ("Last recovery", Text(last_event_matching(yun.events, RECOVERY_MARKERS))),
     ])
     recent = [event_text(event) for event in reversed(yun.events)]
     return Group(summary, Text(""), Text("Watchdog log (newest first)", style="bold"), *recent)

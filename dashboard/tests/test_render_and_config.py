@@ -55,7 +55,7 @@ def test_sensors_panel_flags_a_hot_ssd() -> None:
     assert render.temperature_text("TEMP_M.2", 57).style == ""
 
 
-def test_network_panel_summarises_the_last_reboot() -> None:
+def test_network_panel_summarises_the_last_recovery() -> None:
     text = plain(render.network_panel(snapshot(YUN_SNAPSHOT)))
 
     assert "Last drop" in text and "none in recent log" in text
