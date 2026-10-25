@@ -56,6 +56,8 @@ The reboot worked when I tested it by hand, but never in a real drop. The X3000Z
 
 The router is a Xiaomi AX3000T (MT7981, 128 MB NAND). I unlocked it through a known exploit in the stock firmware and flashed OpenWrt 25.12. The room is its own routed subnet behind the router's NAT instead of a bridge onto the house LAN. The router is also a Tailscale subnet router for that subnet, so the BMC and the Yún are reachable from my tailnet without running Tailscale themselves.
 
+The ISP router hands out one IPv6 `/64` and doesn't delegate prefixes, so the room gets IPv6 through OpenWrt's relay mode: the router passes the house `/64` through and proxies neighbour discovery for the room's addresses. Traffic is still routed, so the firewall's wan-to-lan reject covers IPv6 as well. From the house side, every TCP port on the workstation's IPv6 address gets a reset from the router. The point of it is Tailscale: with IPv6 it can often connect directly where IPv4 is stuck behind two layers of NAT.
+
 It also fixed the room's latency under load. I measured it with the Waveform bufferbloat test from a wired laptop in the room:
 
 | | Speed (Mbit/s, down / up) | Added latency, download | Added latency, upload |
@@ -68,7 +70,9 @@ Upload needed no shaping: the Linux Wi-Fi stack's own queueing keeps it flat. Do
 
 ### Remote power-on
 
-The Yún can't run Tailscale: the kernel has no TUN device and there's about 10 MB of RAM free. Rather than open a port at home, it polls a private [ntfy](https://ntfy.sh) topic over outbound HTTPS and answers on a second one. The two random topic names are the shared secret. The poller remembers message IDs so a command never runs twice, and on startup it only looks back one poll interval so old commands aren't replayed.
+The Yún can't run Tailscale: the kernel has no TUN device and there's about 10 MB of RAM free. Rather than open a port at home, it polls a private [ntfy](https://ntfy.sh) topic over outbound HTTPS and answers on a second one. The poller remembers message IDs so a command never runs twice, and on startup it only looks back one poll interval.
+
+Commands are signed: `on 1761380000 <HMAC-SHA256 of "on 1761380000">`, with a key that sits in the config file on the laptop and on the Yún and nowhere else. The Yún drops anything unsigned, anything more than two minutes off its clock, and any timestamp it has already accepted, so someone who learns the topic name can read the replies but can't send a command or replay one. The Python 2.7.3 on the Yún predates `hmac.compare_digest`, so it compares signatures in constant time by hand. One side effect: for the first two minutes after the Yún boots its clock is wrong, and it refuses every command until NTP fixes it.
 
 The Yún's OpenSSL (1.0.1, from 2014) can't talk to the BMC at all, because the BMC only accepts TLS 1.2 ECDHE-GCM or TLS 1.3. It can't talk to ntfy.sh either. Both calls go through a static, checksum-verified [curl build](https://github.com/stunnel/static-curl) with a current CA bundle, kept on the SD card.
 
@@ -90,6 +94,7 @@ The interval comes from ntfy.sh's free limits: 250 messages a day per IP, and th
 - The Yún's SSH server is dropbear 2011.54. It only speaks `diffie-hellman-group14-sha1` and `ssh-rsa`, so it needs its own RSA key and those algorithms re-enabled on the client side. That wasn't quite enough after the Yún's IP changed: with no saved host key for the new address, OpenSSH 10.6 sends its full list of modern algorithms and dropbear drops the connection within 10 ms. A `HostKeyAlias` pointing at the old known_hosts entry makes the client lead with `ssh-rsa` again.
 - OpenWrt's `network.wireless` object rejects calls made over the web API. The web API adds a `ubus_rpc_session` field to every call's arguments, and `network.wireless` validates its arguments strictly, so a radio restart over HTTP fails with "invalid argument" even with the right ACL. The watchdog runs `/sbin/wifi` through `file exec` instead, which is what LuCI does.
 - My first bufferbloat runs through the new router measured the old one. Only the laptop's IPv4 default route pointed at the new router, and the browser used IPv6 over the laptop's Wi-Fi. The giveaway was the router's CPU sitting at 0% during a 300 Mbit/s test.
+- IPv6 relay mode needs `sourcefilter=0` on the upstream interface. Without a delegated prefix, netifd installs the IPv6 default route as `default from <the router's own address>`, so the router itself has IPv6 while every forwarded packet from the room fails with "no route". The relay also takes a few seconds to learn each device's address before return traffic finds its way back.
 - The workstation's OS lives on a 7200 rpm HDD. From `ws on` to reachable over Tailscale takes about 2:45: POST 1:12, bootloader 0:41 (GRUB reading an 83 MB initrd off the disk), kernel 0:13, then userspace. The fully booted desktop is about a minute after that.
 
 ## Verified
@@ -106,4 +111,4 @@ The interval comes from ntfy.sh's free limits: 250 messages a day per IP, and th
 - The router login goes over plain HTTP on the room LAN. The `yun` account's password is random and used nowhere else, and its ACL limits it to reading the uplink, restarting Wi-Fi and rebooting. Only a hash is stored on the router.
 - On the Yún, the factory open Wi-Fi AP, web panel, web terminal, AllJoyn, avahi and dnsmasq are all disabled. SSH is key-only, and it's the only port listening.
 - IPMI over LAN is off on the BMC (`ipmitool lan set 1 access off`, run in-band from the workstation). IPMI 2.0 hands a crackable password hash to anyone who asks, and nothing here needs it. Redfish and the web UI are unaffected. I checked with an unauthenticated "Get Channel Authentication Capabilities" probe: it gets an answer with access on and silence with it off.
-- Anyone who learns the ntfy topic names can switch the workstation on or off, or read its status snapshots. That's the accepted trade-off for having no inbound ports. The three topic names are not in this repo.
+- Anyone who learns the ntfy topic names can read the replies and status snapshots, which is the accepted trade-off for having no inbound ports. They can't send commands, which need the HMAC key (see "Remote power-on"). Neither the topic names nor the key are in this repo.
