@@ -7,8 +7,13 @@ third topic for the laptop dashboard. Outbound HTTPS only, through the static
 curl on the SD card: the Yun's own OpenSSL is too old for both ntfy.sh and the BMC.
 
 Commands: status | on | off (graceful) | forceoff | report
+Commands arrive signed as "<command> <unix time> <hex HMAC-SHA256 of the first two>",
+keyed with CMD_KEY from the config. Unsigned, stale or replayed ones are rejected,
+so knowing the topic name isn't enough to switch the workstation.
 Local use: ws-remote.py <command>   or   ws-remote.py snapshot  (print, don't publish)
 """
+import hashlib
+import hmac
 import json
 import os
 import subprocess
@@ -31,9 +36,16 @@ LOG_PATH = "/mnt/sda1/ws-remote.log"
 WATCHDOG_LOG_PATH = "/mnt/sda1/room-watchdog.log"
 WATCHDOG_SCRIPT = "room-watchdog.py"
 RECENT_EVENTS = 8
+# Bounds both clock skew and how long a captured command stays usable. The Yun's
+# clock is wrong for ~2 min after boot (until NTP), so commands are refused then.
+COMMAND_MAX_AGE_S = 120
 
 
 class CurlError(Exception):
+    pass
+
+
+class CommandRejected(Exception):
     pass
 
 
@@ -190,6 +202,39 @@ def fetch_messages(topic, since):
     return [event for event in events if event.get("event") == "message"]
 
 
+def command_signature(key, payload):
+    return hmac.new(key, payload, hashlib.sha256).hexdigest()
+
+
+def signatures_match(expected, received):
+    # hmac.compare_digest only arrived in Python 2.7.7; the Yun has 2.7.3.
+    if len(expected) != len(received):
+        return False
+    difference = 0
+    for expected_char, received_char in zip(expected, received):
+        difference |= ord(expected_char) ^ ord(received_char)
+    return difference == 0
+
+
+def verify_command(key, text, last_timestamp, now):
+    """Return (command, timestamp) from a signed "<command> <unix time> <hex hmac>"."""
+    try:
+        parts = text.encode("ascii").split()  # ntfy's JSON gives unicode; hmac needs bytes
+    except UnicodeError:
+        raise CommandRejected("not a signed command")
+    if len(parts) != 3 or not parts[1].isdigit():
+        raise CommandRejected("not a signed command")
+    command, timestamp, signature = parts
+    if not signatures_match(command_signature(key, "%s %s" % (command, timestamp)), signature):
+        raise CommandRejected("bad signature")
+    age = now - int(timestamp)
+    if abs(age) > COMMAND_MAX_AGE_S:
+        raise CommandRejected("stale (%ds old)" % age)
+    if int(timestamp) <= last_timestamp:
+        raise CommandRejected("replayed")
+    return command.lower(), int(timestamp)
+
+
 def handle_message(config, command):
     if command == "report":
         publish_snapshot(config)
@@ -200,6 +245,7 @@ def handle_message(config, command):
 def serve(config):
     since = FIRST_POLL_LOOKBACK
     seen_ids = set()
+    last_timestamp = 0
     next_snapshot_at = 0
     log("polling ntfy every %ds, status every %ds" % (POLL_INTERVAL_S, STATUS_INTERVAL_S))
     while True:
@@ -209,7 +255,13 @@ def serve(config):
                 if message["id"] in seen_ids:
                     continue
                 seen_ids.add(message["id"])
-                command = message.get("message", "").strip().lower()
+                try:
+                    command, last_timestamp = verify_command(
+                        config["CMD_KEY"], message.get("message", ""), last_timestamp, int(time.time()))
+                except CommandRejected as rejection:
+                    log("rejected command: %s" % rejection)
+                    publish(config["REPLY_TOPIC"], "rejected: %s" % rejection)
+                    continue
                 log("command %r" % command)
                 answer = handle_message(config, command)
                 log(answer)
@@ -230,6 +282,9 @@ def main():
     if len(sys.argv) > 1:
         print(run_command(sys.argv[1], config["BMC_PUBKEY_PIN"]))
         return 0
+    if not config.get("CMD_KEY"):
+        log("CMD_KEY is not set in %s, refusing to take commands" % CONFIG_PATH)
+        return 1
     serve(config)
     return 0
 

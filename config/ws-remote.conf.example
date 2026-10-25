@@ -1,4 +1,5 @@
 CMD_TOPIC=ws-<random, e.g. python -c "import secrets; print(secrets.token_urlsafe(24))">
+CMD_KEY=<shared HMAC key, python -c "import secrets; print(secrets.token_hex(32))">   # both copies
 REPLY_TOPIC=ws-<another random value>
 STATUS_TOPIC=ws-<a third random value, for dashboard snapshots>
 BMC_PUBKEY_PIN=<base64 sha256 of the BMC public key, see README>   # Yun copy only

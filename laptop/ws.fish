@@ -14,7 +14,21 @@ function ws --description 'Workstation power via the Yún + BMC over ntfy: ws st
     set -l poll_s 5
     set -l since (date +%s)
 
-    if not curl -sf -m 15 -o /dev/null -d $command https://ntfy.sh/$cmd_topic
+    # Same format as dashboard/src/homelab_dashboard/commands.py. Python reads the
+    # key from the file itself so it never appears on a command line.
+    set -l signed (python3 -c '
+import hashlib, hmac, sys
+command, timestamp, conf = sys.argv[1:]
+key = next(line.split("=", 1)[1].strip() for line in open(conf) if line.startswith("CMD_KEY="))
+payload = command + " " + timestamp
+print(payload, hmac.new(key.encode(), payload.encode(), hashlib.sha256).hexdigest())
+' $command $since $conf 2>/dev/null)
+    or begin
+        echo "ws: no CMD_KEY in $conf" >&2
+        return 1
+    end
+
+    if not curl -sf -m 15 -o /dev/null -d "$signed" https://ntfy.sh/$cmd_topic
         echo "ws: could not reach ntfy.sh" >&2
         return 1
     end
@@ -27,7 +41,7 @@ function ws --description 'Workstation power via the Yún + BMC over ntfy: ws st
         sleep $poll_s
     end
     if test (count $replies) -eq 0
-        echo "ws: no reply after "$reply_wait_s"s (Yún offline, or the X3000Z backhaul is down)" >&2
+        echo "ws: no reply after "$reply_wait_s"s (Yún offline, or the room's uplink is down)" >&2
         return 1
     end
     printf '%s\n' $replies

@@ -9,6 +9,7 @@ from textual.containers import Grid
 from textual.widgets import Footer, Header, Static
 
 from . import render
+from .commands import sign_command
 from .config import Config, load_config
 from .ntfy import fetch_messages, publish
 from .snapshots import Snapshot, merge_latest
@@ -118,7 +119,7 @@ class HomelabApp(App):
     def request_report(self) -> None:
         requested_at = int(time.time())
         try:
-            publish(self.config.cmd_topic, "report")
+            publish(self.config.cmd_topic, sign_command("report", self.config.cmd_key, requested_at))
         except OSError as error:
             self.call_from_thread(self.set_status, f"couldn't send the report request: {error}")
             return

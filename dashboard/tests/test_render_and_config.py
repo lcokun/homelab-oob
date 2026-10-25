@@ -6,6 +6,7 @@ import pytest
 from rich.console import Console, RenderableType
 
 from homelab_dashboard import render
+from homelab_dashboard.commands import sign_command
 from homelab_dashboard.config import load_config
 from homelab_dashboard.snapshots import parse_snapshot
 
@@ -64,16 +65,24 @@ def test_network_panel_summarises_the_last_recovery() -> None:
 
 def test_config_reads_the_ws_remote_file(tmp_path: Path) -> None:
     path = tmp_path / "ws-remote.conf"
-    path.write_text("CMD_TOPIC=ws-a\nREPLY_TOPIC=ws-b\nSTATUS_TOPIC=ws-c\nWS_TAILSCALE_HOST=100.64.0.1\n")
+    path.write_text("CMD_TOPIC=ws-a\nCMD_KEY=k\nREPLY_TOPIC=ws-b\nSTATUS_TOPIC=ws-c\nWS_TAILSCALE_HOST=100.64.0.1\n")
 
     config = load_config(path)
 
-    assert (config.cmd_topic, config.status_topic, config.tailscale_host) == ("ws-a", "ws-c", "100.64.0.1")
+    assert (config.cmd_topic, config.cmd_key, config.status_topic, config.tailscale_host) == (
+        "ws-a", "k", "ws-c", "100.64.0.1")
 
 
 def test_config_names_missing_keys(tmp_path: Path) -> None:
     path = tmp_path / "ws-remote.conf"
     path.write_text("CMD_TOPIC=ws-a\n")
 
-    with pytest.raises(ValueError, match="STATUS_TOPIC, WS_TAILSCALE_HOST"):
+    with pytest.raises(ValueError, match="CMD_KEY, STATUS_TOPIC, WS_TAILSCALE_HOST"):
         load_config(path)
+
+
+def test_signed_command_matches_an_independent_hmac() -> None:
+    # Expected value from: printf 'report 1700000000' | openssl dgst -sha256 -hmac test-key
+    expected = "report 1700000000 fc70d3aec4d67bfd56a1ac535071bcf31be9b461a925f64d838eb8a595670475"
+
+    assert sign_command("report", "test-key", 1700000000) == expected
